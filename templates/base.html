@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load static %}
+<head>
+    <meta charset="UTF-8">
+    <title>BlueTask</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Loading CSS styles -->
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+    <link href="{% static 'css/datatables.min.css' %}" rel="stylesheet" />
+    <link href="{% static 'css/jquery-ui.css' %}" rel="stylesheet" />
+
+</head>
+
+<body>
+
+    <!-- Content -->
+    <div class="container mt-4">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Loading JS scripts -->
+    <script src="{% static 'js/jquery.min.js' %}"></script>
+    <script src="{% static 'js/bootstrap.min.js' %}"></script>
+    <script src="{% static 'js/datatables.min.js' %}"></script>
+    <script src="{% static 'js/jquery-ui.js' %}"></script>
+    {{ data|json_script:"my_data" }}
+    {{ data2|json_script:"my_data2" }}
+    <script>
+        
+        function reloadTable(my_data_new) {
+            //Function which reloads table with new data
+                var json_data = my_data_new;
+                var json_data2 = JSON.parse($("#my_data2").html());
+                var table = $("#system-contracts").DataTable();
+                table.clear().draw();
+                 //Adding rows
+                $.each(json_data.data, function (i, item) {
+                    var system = json_data2.find(function (s) {
+                        return s.id === item.system_id;
+                    });
+                    var systemName = system ? system.name : '';
+                    var rowData = [
+                        systemName,
+                        item.request,
+                        item.order_number,
+                        item.from_date,
+                        item.to_date,
+                        item.amount,
+                        item.amount_type,
+                        item.amount_period,
+                        item.authorization_percent,
+                        item.active,
+                        '<button class="btn btn-danger delete-btn" data-id="' + item.id + '">Delete</button>'
+                    ];
+                    table.row.add(rowData).draw();
+                    
+                });
+        }
+
+
+        $(document).ready(function () {
+            if (typeof jQuery == 'undefined') {
+                console.log('jQuery is not loaded');
+            } else {
+                console.log('jQuery is loaded');
+            //Loading datepickers    
+            $('#id_to_date').datepicker({
+                dateFormat: 'yy-mm-dd'
+            }).datepicker('setDate', $('#id_to_date').val());
+            $('#id_from_date').datepicker({
+                dateFormat: 'yy-mm-dd'
+            }).datepicker('setDate', $('#id_from_date').val());
+            }
+        });
+
+    </script>
+    <script>
+        $(function () {
+            // Handling file selection
+            $('#file-input').change(function () {
+                var fileName = $(this).val().split('\\').pop();
+                $(this).next('.custom-file-label').addClass("selected").html("Selected file: " + fileName);
+            });
+
+            // handling file upload
+            $('#import-form').submit(function (event) {
+                event.preventDefault();
+                var form_data = new FormData(this);
+                var file = form_data.get("file");   
+                var file_name = file.name;
+                var allowed_extensions = [".xls", ".xlsx"];
+                var file_extension = file_name.split('.').pop();
+                if (!file.name) {
+                    alert("No file selected.");
+                    return;
+                }
+                if (allowed_extensions.indexOf("." + file_extension) == -1) {
+                    alert("Wrong file format. Allowed extensions : " + allowed_extensions.join(", "));
+                    return;
+                }
+                $.ajax({
+                    url: "{% url 'index' %}",
+                    type: 'POST',
+                    data: form_data,
+                    processData: false,
+                    contentType: false,
+                    success: function (response) {
+                        alert(response.message);
+                        $.get("reload-table", function (my_data_new) {
+                            reloadTable(my_data_new);
+                        });
+                        $('#import-form')[0].reset();
+                    },
+                    error: function (response) {
+                        alert(response.message);
+                        $.get("reload-table", function (my_data_new) {
+                            reloadTable(my_data_new);
+                        });
+                        alert("Error while importing file.");
+                    }
+                });
+            });
+        });
+    </script>
+    
+    
+    
+    
+    <script type="text/javascript">
+        //id of SystemContract which is being edited in the form
+        var id_in_form = null;
+        
+        //Loading table
+        $(document).ready(function () {
+            var json_data = JSON.parse($("#my_data").html());
+            var json_data2 = JSON.parse($("#my_data2").html());
+            var table = $("#system-contracts").DataTable();
+            
+            // Adding rows
+            $.each(json_data, function (i, item) {
+                var system = json_data2.find(function (s) {
+                    return s.id === item.system_id;
+                });
+                var systemName = system ? system.name : '';
+                var rowData = [
+                    systemName,
+                    item.request,
+                    item.order_number,
+                    item.from_date,
+                    item.to_date,
+                    item.amount,
+                    item.amount_type,
+                    item.amount_period,
+                    item.authorization_percent,
+                    item.active,
+                    '<button class="btn btn-danger delete-btn" data-id="' + item.id + '">Delete</button>'
+                ];
+                table.row.add(rowData).draw();
+            });
+        
+            //Filling form with data from selected row
+            function fillFormWithData(rowData) {
+                var system = json_data2.find(function (s) {
+                    return s.name === rowData[0];
+                });
+                var systemId = system ? system.id : '';
+                $('#id_system').val(systemId);
+                $('#id_request').val(rowData[1]);
+                $('#id_order_number').val(rowData[2]);
+                $('#id_from_date').val(rowData[3]);
+                $('#id_to_date').val(rowData[4]);
+                $('#id_amount').val(rowData[5]);
+                $('#id_amount_type').val(rowData[6]);
+                $('#id_amount_period').val(rowData[7]);
+                $('#id_authorization_percent').val(rowData[8]);
+                $('#id_active').prop('checked', rowData[9]);
+            }
+
+
+            
+
+                
+            //filling form with data from selected row
+            $('#system-contracts tbody').on('click', 'tr', function () {
+                    var rowData = table.row(this).data();
+                    fillFormWithData(rowData);
+                    id_in_form = $(this).find(".delete-btn").data("id");
+             });
+        });
+
+            // Handling record deletion
+        $('#system-contracts').on('click', '.delete-btn', function () {
+            var id = $(this).data('id');
+            if (confirm("Are you sure?")) {
+                $.ajax({
+                    url: "/bluetask/delete-record/",
+                    type: "POST",
+                    data: {
+                        'system_contracts_id': id,
+                         csrfmiddlewaretoken: '{{ csrf_token }}'
+                    },
+                    success: function (response) {
+                        alert(response.message);
+                        $.get("reload-table", function (my_data_new) {
+                            reloadTable(my_data_new);
+                        });
+                        $('#new-record-form')[0].reset();
+                        id_in_form = null;
+                    },
+                });
+            }
+        });
+
+        // Handling record update or creation
+        $('#new-record-form').submit(function (event) {
+            event.preventDefault();
+            var form_data = $(this).serialize();
+            $.ajax({
+                url: "{% url 'add_record' %}",
+                type: 'POST',
+                data: form_data + '&id_in_form=' + id_in_form,
+                success: function (response) {
+                    alert(response.message);
+                    $.get("reload-table", function (my_data_new) {
+                        reloadTable(my_data_new);    
+                    });     
+                    $('#new-record-form')[0].reset();
+                    id_in_form = null;
+
+                },
+                error: function (response) {
+                    alert("Error while adding new record.");
+                }
+            });
+        }); 
+    </script>
+</body>
+
+</html>
